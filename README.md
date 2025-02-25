@@ -62,8 +62,17 @@ It is important to create the file within your terraform-s3-website folder, not 
 2. **Use a Module for S3 Website**: Incorporate a module for creating an S3 bucket configured for website hosting.
 
 ```hcl
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "~> 5.41"
+    }
+  }
+}
+
 module "website" {
-   source = "github.com/glennbechdevops/s3-website-module?ref=1.0.0"
+   source = "github.com/glennbechdevops/s3-website-module?ref=1.1.2"
    bucket_name = var.bucket_name
 }
 ```
@@ -96,13 +105,6 @@ Replace <unique-bucket-name> with for example your name, initials or something t
    terraform init
    terraform apply 
    ```
-
-If you get an error message saying something like 
-```
-│ Error: putting S3 Bucket (bech-final) Policy: operation error S3: PutBucketPolicy, https response error StatusCode: 403, RequestID: J1K4KCMHADJMZMV1, HostID: dUSuqDOOUzLsUCp2OVqZmFKnYX4tsQdEwaxZiQZe76/uRhPTuKILLw7PFjtW5J/z4T6G7f1uduM=, api error AccessDenied: Access Denied```
-```
-
-Retry the operation. Ask the instructor why this happens if you have time and are interested :) 
 
 
 ### Step 4: Upload Files to S3 Bucket
@@ -137,11 +139,13 @@ https://github.com/glennbechdevops/terraform-module-s3-website-
 * Use terraform destroy to remove the infrastructure
 * Look at the variable again, insert a default value for it (Find out how)
 * Run ```terraform apply```one more time, you are not asked for the value for bucket_name. Why?
-* 
+
+Finished early?
+
 * FlipClass: Look at Terraform modules https://developer.hashicorp.com/terraform/language/modules
 * FlipClass: Look at the module you used in this module in github
 * FlipClass: Look at the S3 resource documentation https://registry.terraform.io/providers/hashicorp/aws/3.36.0/docs/resources/s3_bucket
-* FlipClass: an you make your own S3 Website module, based on mine, make it a bit different?
+* FlipClass: an you make your own S3 Website module in your own github repo? -  based on mine, make it a bit different?
   
 ##
 Conclusion
