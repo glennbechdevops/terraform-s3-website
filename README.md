@@ -18,6 +18,7 @@ integrated development environment (IDE) that lets you write, run, and debug you
 
 ##  Access the Cloud9 Service
 
+- Make sure you are in the eu-west-1 region (Ireland)
 - Once signed in, locate the **Services** dropdown menu at the top of the console.
 - **Search for** Cloud9 by typing "Cloud9" into the search bar or navigating through the services list.
 - **Select** AWS Cloud9 from the results to open the Cloud
