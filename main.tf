@@ -32,6 +32,7 @@ module "s3_website" {
 
   tags = {
     Name        = "Crypto Juice Exchange"
+    test        = "change"
     Environment = "Demo"
     ManagedBy   = "Terraform"
   }
