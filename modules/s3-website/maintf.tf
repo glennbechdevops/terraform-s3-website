@@ -16,6 +16,12 @@ resource "aws_s3_bucket_website_configuration" "website" {
   }
 }
 
+data "aws_acm_certificate" "wildcard" {
+  provider = aws.us-east-1
+  domain   = "*.thecloudcollege.com"
+  statuses = ["ISSUED"]
+}
+
 resource "aws_s3_bucket_public_access_block" "website" {
   bucket = aws_s3_bucket.website.id
 
@@ -51,7 +57,7 @@ resource "aws_s3_bucket_policy" "website" {
 resource "aws_cloudfront_distribution" "website" {
   enabled             = true
   default_root_object = "index.html"
-
+  aliases             = ["${var.subdomain}.thecloudcollege.com"]  
   origin {
     domain_name = aws_s3_bucket_website_configuration.website.website_endpoint
     origin_id   = "S3-${var.bucket_name}"
@@ -89,9 +95,12 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = data.aws_acm_certificate.wildcard.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 }
+
 
 output "s3_website_url" {
   value = "http://${aws_s3_bucket.website.bucket}.s3-website.${aws_s3_bucket.website.region}.amazonaws.com"
