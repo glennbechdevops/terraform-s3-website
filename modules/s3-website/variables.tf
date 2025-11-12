@@ -45,5 +45,5 @@ output "cloudfront_domain" {
 variable "subdomain" {
   description = "Your name for the subdomain (e.g., 'glenn' becomes glenn.thecloudcollege.com)"
   type        = string
-  default     = "glenn"
+  default     = "practice"
 }

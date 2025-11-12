@@ -22,6 +22,11 @@ moved {
 module "s3_website" {
   source = "./modules/s3-website"
 
+  providers = {
+      aws           = aws
+      aws.us-east-1 = aws.us-east-1
+    }
+    
   bucket_name         = "pgr301-practice-run-1"
   website_files_path  = "${path.root}/s3_demo_website/dist"
 

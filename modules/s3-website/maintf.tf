@@ -16,6 +16,12 @@ resource "aws_s3_bucket_website_configuration" "website" {
   }
 }
 
+data "aws_acm_certificate" "wildcard" {
+  provider = aws.us-east-1
+  domain   = "*.thecloudcollege.com"
+  statuses = ["ISSUED"]
+}
+
 resource "aws_s3_bucket_public_access_block" "website" {
   bucket = aws_s3_bucket.website.id
 
@@ -44,19 +50,6 @@ resource "aws_s3_bucket_policy" "website" {
   depends_on = [aws_s3_bucket_public_access_block.website]
 }
 
-# Resource - oppretter en ny DNS-record i den eksisterende zonen
-resource "aws_route53_record" "website" {
-  zone_id = data.aws_route53_zone.main.zone_id  # Bruker data fra data source
-  name    = "${var.subdomain}.thecloudcollege.com"
-  type    = "A"
-
-  alias {
-    name                   = aws_cloudfront_distribution.website.domain_name
-    zone_id                = aws_cloudfront_distribution.website.hosted_zone_id
-    evaluate_target_health = false
-  }
-}
-
 # ============================================
 # CloudFront Distribution for Global CDN
 # ============================================
@@ -64,7 +57,7 @@ resource "aws_route53_record" "website" {
 resource "aws_cloudfront_distribution" "website" {
   enabled             = true
   default_root_object = "index.html"
- aliases             = ["${var.subdomain}.thecloudcollege.com"]  
+  aliases             = ["${var.subdomain}.thecloudcollege.com"]  
   origin {
     domain_name = aws_s3_bucket_website_configuration.website.website_endpoint
     origin_id   = "S3-${var.bucket_name}"
@@ -102,17 +95,12 @@ resource "aws_cloudfront_distribution" "website" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = data.aws_acm_certificate.wildcard.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 }
 
-# Data source - henter eksisterende wildcard ACM-sertifikat
-# Bruker us-east-1 provider fordi CloudFront krever sertifikat i denne regionen
-data "aws_acm_certificate" "wildcard" {
-  provider = aws.us-east-1
-  domain   = "*.thecloudcollege.com"
-  statuses = ["ISSUED"]
-}
 
 output "s3_website_url" {
   value = "http://${aws_s3_bucket.website.bucket}.s3-website.${aws_s3_bucket.website.region}.amazonaws.com"
