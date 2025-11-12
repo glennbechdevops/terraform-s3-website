@@ -919,154 +919,7 @@ Du har nå lært:
 
 ## Bonusoppgaver
 
-### 1. GitHub Actions CI/CD Pipeline
-
-#### Mål
-
-Automatiser Terraform deployment:
-- **Pull Request**: Kjør `terraform plan` og vis endringer
-- **Merge til main**: Kjør `terraform apply` automatisk
-
-#### Steg 1: Opprett Workflow Fil
-
-**Lag** `.github/workflows/terraform.yml`:
-
-```yaml
-name: Terraform Infrastructure
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  AWS_REGION: eu-west-1
-  TF_VERSION: 1.6.0
-
-jobs:
-  terraform:
-    name: Terraform Plan & Apply
-    runs-on: ubuntu-latest
-
-    permissions:
-      pull-requests: write
-      contents: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Format Check
-        run: terraform fmt -check
-        continue-on-error: true
-
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Plan
-        id: plan
-        run: terraform plan -no-color
-        continue-on-error: true
-
-      - name: Comment Plan on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const output = `### Terraform Plan
-
-            \`\`\`
-            ${{ steps.plan.outputs.stdout }}
-            \`\`\`
-
-            *Pushed by: @${{ github.actor }}*`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
-```
-
-#### Steg 2: Konfigurer GitHub Secrets
-
-Du må gi GitHub Actions tilgang til AWS:
-
-1. **Gå til ditt GitHub repository**
-2. **Settings** → **Secrets and variables** → **Actions**
-3. **Klikk "New repository secret"**
-4. **Legg til to secrets**:
-   - Name: `AWS_ACCESS_KEY_ID`, Value: `<din AWS access key>`
-   - Name: `AWS_SECRET_ACCESS_KEY`, Value: `<din AWS secret key>`
-
-**Sikkerhetstips**: Disse secrets bør være fra en dedicated IAM-bruker med minimal permissions (kun det Terraform trenger).
-
-#### Steg 3: Test Pipeline
-
-1. **Lag en ny branch**:
-
-```bash
-git checkout -b test-pipeline
-```
-
-2. **Gjør en liten endring** (f.eks. i README eller legg til en tag):
-
-```hcl
-# I main.tf
-module "s3_website" {
-  # ...
-  tags = {
-    # ...
-    PipelineTest = "true"  # Ny tag
-  }
-}
-```
-
-3. **Commit og push**:
-
-```bash
-git add .
-git commit -m "Test GitHub Actions pipeline"
-git push origin test-pipeline
-```
-
-4. **Opprett Pull Request** på GitHub
-
-5. **Observer**:
-   - GitHub Actions kjører `terraform plan`
-   - En kommentar vises på PR med plan output
-   - Du kan se hva som vil endres før merge
-
-6. **Merge PR** til main:
-   - GitHub Actions kjører `terraform apply` automatisk
-   - Infrastrukturen oppdateres uten manuell intervensjon
-
-**Gratulerer!** Du har nå full CI/CD for infrastrukturen din.
-
----
-
-### 2. Custom Domain med Data Sources
+### 1. Custom Domain med Data Sources
 
 #### Hva er Data Sources?
 
@@ -1277,6 +1130,155 @@ Vent noen minutter på at CloudFront-distribusjonen er ferdig deployet, og åpne
 - CloudFront krever ACM-sertifikater i us-east-1 region
 - Route53 `alias` records peker til AWS-ressurser (som CloudFront) uten å bruke IP-adresser
 - Data sources refereres med `data.<type>.<name>`, f.eks. `data.aws_route53_zone.main.zone_id`
+
+---
+
+### 2. GitHub Actions CI/CD Pipeline
+
+#### Mål
+
+Automatiser Terraform deployment:
+- **Pull Request**: Kjør `terraform plan` og vis endringer
+- **Merge til main**: Kjør `terraform apply` automatisk
+
+#### Steg 1: Opprett Workflow Fil
+
+**Lag** `.github/workflows/terraform.yml`:
+
+```yaml
+name: Terraform Infrastructure
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-west-1
+  TF_VERSION: 1.6.0
+
+jobs:
+  terraform:
+    name: Terraform Plan & Apply
+    runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+        continue-on-error: true
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color
+        continue-on-error: true
+
+      - name: Comment Plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### Terraform Plan
+
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+
+            *Pushed by: @${{ github.actor }}*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
+```
+
+#### Steg 2: Konfigurer GitHub Secrets
+
+Du må gi GitHub Actions tilgang til AWS:
+
+1. **Gå til ditt GitHub repository**
+2. **Settings** → **Secrets and variables** → **Actions**
+3. **Klikk "New repository secret"**
+4. **Legg til to secrets**:
+   - Name: `AWS_ACCESS_KEY_ID`, Value: `<din AWS access key>`
+   - Name: `AWS_SECRET_ACCESS_KEY`, Value: `<din AWS secret key>`
+
+**Sikkerhetstips**: Disse secrets bør være fra en dedicated IAM-bruker med minimal permissions (kun det Terraform trenger).
+
+#### Steg 3: Test Pipeline
+
+1. **Lag en ny branch**:
+
+```bash
+git checkout -b test-pipeline
+```
+
+2. **Gjør en liten endring** (f.eks. i README eller legg til en tag):
+
+```hcl
+# I main.tf
+module "s3_website" {
+  # ...
+  tags = {
+    # ...
+    PipelineTest = "true"  # Ny tag
+  }
+}
+```
+
+3. **Commit og push**:
+
+```bash
+git add .
+git commit -m "Test GitHub Actions pipeline"
+git push origin test-pipeline
+```
+
+4. **Opprett Pull Request** på GitHub
+
+5. **Observer**:
+   - GitHub Actions kjører `terraform plan`
+   - En kommentar vises på PR med plan output
+   - Du kan se hva som vil endres før merge
+
+6. **Merge PR** til main:
+   - GitHub Actions kjører `terraform apply` automatisk
+   - Infrastrukturen oppdateres uten manuell intervensjon
+
+**Gratulerer!** Du har nå full CI/CD for infrastrukturen din.
+
+---
 
 ### 3. Validation Rules på variabler i modulen
 
