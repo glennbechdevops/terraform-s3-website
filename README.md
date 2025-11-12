@@ -32,7 +32,7 @@ Gjennom denne øvelsen vil du mestre:
 4. **Terminalvindu**: Du vil utføre de fleste kommandoer i terminalen som åpner seg nederst i Codespace
 5. **AWS Credentials**. Kjør `aws configure` og legg inn AWS aksessnøkler.
 
-**💡 Ekspert tips**: Trykk `.` (punktum) når du er i et GitHub repository for å åpne det direkte i en nettleser-basert VS Code editor. Dette er raskere enn å starte en full Codespace og perfekt for raske editeringer! 
+**Ekspert tips**: Trykk `.` (punktum) når du er i et GitHub repository for å åpne det direkte i en nettleser-basert VS Code editor. Dette er raskere enn å starte en full Codespace og perfekt for raske editeringer! 
 
 
 ### Steg 1: Verifiser miljøet
@@ -219,6 +219,8 @@ terraform apply -var 'bucket_name=ditt_bucket_navn'
 
 Terraform vil nå vise at det ikke er nødvendig med endringer, siden bucket-navnet er det samme.
 
+**Pro tips**: Hvis du er helt sikker på hva du gjør - og liker å leve litt risikabelt - kan du bruke `terraform apply --auto-approve` for å hoppe over bekreftelsen. Men vær oppmerksom på at dette kan føre til utilsiktede endringer hvis du ikke har sjekket planen først.
+
 **Fordelen med variabler**: Du kan nå enkelt endre bucket-navnet uten å redigere koden, og gjenbruke samme konfigurasjon for flere miljøer.
 
 ### Steg 8: Bruk default-verdier for variabler
@@ -267,8 +269,6 @@ I denne delen skal vi utvide infrastrukturen med mer avanserte Terraform-konsept
 - CloudFront CDN for global distribusjon
 - Automatisering med GitHub Actions
 
-**Estimert tid**: 1.5-2 timer
-
 ---
 
 ## Del 1: Remote State Management
@@ -286,6 +286,8 @@ Først må vi lage en S3 bucket og DynamoDB-tabell for state management. Disse m
 ```hcl
 # This file creates the resources needed for Terraform remote state
 # Run this FIRST before configuring the backend
+
+data "aws_region" "current" {}
 
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "ditt-navn-terraform-state"  # Bytt til unikt navn
@@ -305,7 +307,7 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
 }
 
 resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "terraform-state-locks"
+  name         = "ditt-navn-terraform-state-locks"  # Bytt til unikt navn
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -343,7 +345,9 @@ terraform apply
 
 ### Steg 2: Konfigurer Backend
 
-1. **Opprett fil** `backend.tf` i rotmappen:
+1. **Opprett fil** `backend.tf` i rotmappen.
+
+Du kan kopiere backend-konfigurasjonen fra output av forrige `terraform apply`, eller skrive den manuelt:
 
 ```hcl
 terraform {
@@ -351,7 +355,7 @@ terraform {
     bucket         = "ditt-navn-terraform-state"  # Samme som i backend-setup.tf
     key            = "website/terraform.tfstate"
     region         = "eu-west-1"  # Din region
-    dynamodb_table = "terraform-state-locks"
+    dynamodb_table = "ditt-navn-terraform-state-locks"  # Samme som i backend-setup.tf
     encrypt        = true
   }
 }
@@ -369,7 +373,18 @@ Terraform vil spørre om du vil kopiere eksisterende state til det nye backend. 
    - Gå til S3 Console og se at state-filen er lastet opp
    - Din lokale `terraform.tfstate` skal nå være tom eller borte
 
-**Gratulerer!** State er nå lagret sentralt. Hvis flere personer jobber på samme prosjekt, vil de alle dele samme state.
+**Gratulerer!** State er nå lagret sentralt. Hvis flere personer jobber på samme prosjekt, vil de alle dele samme state. I tillegg er dere nå beskyttet mot at flere gjør `terraform apply` samtidig - DynamoDB-tabellen sørger for state locking slik at kun én person kan gjøre endringer om gangen.
+
+### Test State Locking
+
+Du kan teste state locking ved å åpne to terminaler og prøve å kjøre `terraform apply` i begge samtidig:
+
+1. **Terminal 1**: Kjør `terraform apply` og bekreft med `yes`
+2. **Terminal 2**: Kjør raskt `terraform apply` mens Terminal 1 fortsatt jobber
+
+**Tips**: Du må være litt rask, siden `terraform apply` går ganske fort når det ikke er mange endringer!
+
+Du vil se at Terminal 2 får en feilmelding om at state er låst, med informasjon om hvem som holder låsen. Dette forhindrer at to personer gjør motstridende endringer samtidig.
 
 ---
 
@@ -385,7 +400,16 @@ Moduler er Terraforms måte å pakke og gjenbruke infrastruktur-kode på. I sted
 
 #### Steg 1: Opprett modul-struktur
 
-Lag følgende mappestruktur:
+Lag mappestrukturen for modulen slik:
+
+```bash
+mkdir -p modules/s3-website
+touch modules/s3-website/main.tf
+touch modules/s3-website/variables.tf
+touch modules/s3-website/outputs.tf
+```
+
+Dette gir følgende struktur:
 
 ```
 modules/
@@ -393,13 +417,6 @@ modules/
     ├── main.tf
     ├── variables.tf
     └── outputs.tf
-```
-
-```bash
-mkdir -p modules/s3-website
-touch modules/s3-website/main.tf
-touch modules/s3-website/variables.tf
-touch modules/s3-website/outputs.tf
 ```
 
 #### Steg 2: Definer variabler for modulen
@@ -432,9 +449,8 @@ variable "website_files_path" {
 
 - Kopier alle S3-relaterte ressurser (`aws_s3_bucket`, `aws_s3_bucket_website_configuration`, etc.)
 - Erstatt hardkodede verdier med `var.bucket_name`, `var.tags`, etc.
-- Behold `locals` for MIME types
 
-**Hint**: I modulen skal du bruke `var.bucket_name` i stedet for `local.website_bucket_name`.
+**Hint**: I modulen skal du bruke `var.bucket_name` direkte.
 
 #### Steg 4: Definer outputs for modulen
 
@@ -460,7 +476,7 @@ output "bucket_arn" {
 data "aws_region" "current" {}
 ```
 
-### ⚠️ Viktig: Før du bruker modulen - State Management
+### Viktig: Før du bruker modulen - State Management
 
 Før vi refaktorerer koden til å bruke modulen, må vi håndtere et kritisk problem:
 
@@ -526,36 +542,75 @@ moved {
   from = aws_s3_bucket_policy.website
   to   = module.s3_website.aws_s3_bucket_policy.website
 }
-
-# Legg til moved blocks for alle S3-ressursene du har
 ```
 
-**Steg 2**: Refaktorer til modul (se Del B nedenfor)
+**Steg 2**: I root `main.tf`, erstatt alle S3-ressursene med et modul-kall:
 
-**Steg 3**: Kjør plan og se magien:
+```hcl
+module "s3_website" {
+  source = "./modules/s3-website"
+
+  bucket_name         = "ditt-bucket-navn"
+  website_files_path  = "${path.root}/s3_demo_website/dist"
+
+  tags = {
+    Name        = "Crypto Juice Exchange"
+    Environment = "Demo"
+    ManagedBy   = "Terraform"
+  }
+}
+```
+
+**Steg 3**: Oppdater outputs i root `main.tf` til å bruke module outputs:
+
+```hcl
+output "s3_website_url" {
+  value       = module.s3_website.website_url
+  description = "URL for the S3 hosted website"
+}
+
+output "bucket_name" {
+  value       = module.s3_website.bucket_name
+  description = "Name of the S3 bucket"
+}
+```
+
+**Steg 4**: Re-initialiser Terraform for modulen:
+
+```bash
+terraform init
+```
+
+**Steg 5**: Kjør plan og se magien:
+
 ```bash
 terraform plan
 ```
 
 Terraform vil si: "These objects moved - no changes needed"
 
-**Steg 4**: Apply for å oppdatere state:
+**Steg 6**: Apply for å oppdatere state:
+
 ```bash
 terraform apply
 ```
 
-**Steg 5**: Når alt fungerer, kan du fjerne `moved` blocks (de trengs ikke lenger)
+**Steg 7**: Når alt fungerer, kan du fjerne `moved` blocks (de trengs ikke lenger)
+
+**Du er nå ferdig!** Red Pill-brukere kan hoppe over Del B nedenfor og gå videre til Del 3: CloudFront CDN.
 
 **Fordel**: Lær avansert Terraform, ingen downtime
 **Ulempe**: Krever mer forståelse
 
 ---
 
-**Velg din vei**, og fortsett til Del B når du er klar!
+**Velg din vei**: Blue Pill-brukere fortsetter til Del B nedenfor. Red Pill-brukere hopper til Del 3.
 
 ---
 
-### Del B: Bruk modulen
+### Del B: Bruk modulen (Blue Pill)
+
+**Denne seksjonen er kun for Blue Pill-brukere som valgte å starte på nytt.**
 
 Nå skal du refaktorere root `main.tf` til å bruke modulen du nettopp laget.
 
@@ -802,7 +857,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const output = `### Terraform Plan 📝
+            const output = `### Terraform Plan
 
             \`\`\`
             ${{ steps.plan.outputs.stdout }}
