@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Newspaper, Wallet, BarChart3, Database } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import PriceCard from './components/PriceCard';
 import PriceChart from './components/PriceChart';
 import NewsCard from './components/NewsCard';
@@ -30,6 +31,46 @@ function AppContent() {
   const { data: cryptoData, isLoading: isPricesLoading } = useCryptoPrices();
   const { data: newsData, isLoading: isNewsLoading } = useCryptoNews();
   const { addToPortfolio } = usePortfolio();
+
+  // Confetti effect on mount
+  useEffect(() => {
+    const duration = 3000;
+    const animationEnd = Date.now() + duration;
+    const defaults = {
+      startVelocity: 30,
+      spread: 360,
+      ticks: 60,
+      zIndex: 0,
+      colors: ['#000000', '#FFFFFF', '#333333', '#CCCCCC']
+    };
+
+    function randomInRange(min: number, max: number) {
+      return Math.random() * (max - min) + min;
+    }
+
+    const interval: NodeJS.Timeout = setInterval(function() {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+      });
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+      });
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const tabs = [
     { id: 'prices' as Tab, label: 'Market Prices', icon: <TrendingUp size={18} /> },
