@@ -1,4 +1,207 @@
-# Hosting av statisk nettside med Terraform og AWS
+# 🍹 Crypto Juice Exchange - Terraform + React Demo
+
+> **Original Lab**: This repo was adapted from a Terraform S3 website hosting lab. The Norwegian lab instructions have been preserved below.
+
+A stunning demonstration of Infrastructure as Code (IaC) using **Terraform** to deploy a modern **React** application to **AWS S3**. This project showcases real-time cryptocurrency data, interactive charts, live news, and beautiful animations.
+
+## 🚀 What Makes This Special
+
+- 📊 **LIVE DATA** - Real cryptocurrency prices from CoinGecko API (updates every 30 seconds)
+- 📈 **Interactive Charts** - Beautiful price history visualizations with Recharts
+- 📰 **Live News Feed** - Latest crypto news from CryptoCompare API
+- 🌍 **Global Market Stats** - Market cap, volume, and dominance with animated charts
+- 💼 **Mock Portfolio** - Track your investments with P&L calculations
+- ✨ **Smooth Animations** - Framer Motion throughout for that "wow" factor
+- 🎨 **Modern Design** - Dark theme with neon accents and glass-morphism effects
+
+## 🛠️ Quick Start
+
+### 1. Build the React App
+
+```bash
+cd s3_demo_website
+npm install
+npm run build
+cd ..
+```
+
+### 2. Deploy with Terraform
+
+```bash
+terraform init
+terraform apply
+```
+
+### 3. Access Your Site
+
+After deployment, Terraform outputs the URL:
+
+```
+s3_website_url = "http://glenn-sin-web-buckett.s3-website.eu-west-1.amazonaws.com"
+```
+
+## 🎓 For Students - Key Learning Points
+
+### What This Demo Teaches
+
+1. **Real Infrastructure as Code**
+   - Terraform manages AWS resources declaratively
+   - Same code = same infrastructure every time
+   - Version controlled infrastructure
+
+2. **Modern Web Development**
+   - React with TypeScript for type safety
+   - API integration with real-time data
+   - State management with React Query
+   - Performance optimization
+
+3. **Cloud Architecture**
+   - S3 static website hosting (pennies per month!)
+   - Proper IAM policies for security
+   - MIME type handling for browsers
+   - Content-based change detection
+
+4. **Professional Practices**
+   - Organized project structure
+   - Comprehensive documentation
+   - Error handling and loading states
+   - Responsive design
+
+### Tech Stack
+
+**Frontend:**
+- ⚛️ React 18 + TypeScript
+- 🎨 Tailwind CSS
+- ✨ Framer Motion (animations)
+- 📊 Recharts (charts)
+- 🔄 React Query (data fetching)
+- ⚡ Vite (build tool)
+
+**Infrastructure:**
+- 🏗️ Terraform
+- ☁️ AWS S3
+- 🔒 IAM Policies
+
+**APIs:**
+- 🪙 CoinGecko - Crypto prices & market data
+- 📰 CryptoCompare - News feed
+
+## 📋 Project Structure
+
+```
+s3_demo_website/
+├── src/
+│   ├── components/          # React components
+│   │   ├── PriceCard.tsx    # Live price cards
+│   │   ├── PriceChart.tsx   # Interactive charts
+│   │   ├── NewsCard.tsx     # News feed
+│   │   ├── Portfolio.tsx    # Portfolio tracker
+│   │   └── MarketStats.tsx  # Market overview
+│   ├── hooks/               # Custom React hooks
+│   ├── services/            # API integration
+│   ├── types/               # TypeScript types
+│   └── App.tsx              # Main app
+├── dist/                    # Build output (created by npm run build)
+└── package.json
+```
+
+## 🎯 Terraform Highlights
+
+The `main.tf` demonstrates:
+
+1. **Local Variables** - Centralized configuration
+2. **Resource Management** - S3 bucket, website config, policies
+3. **For Each Loops** - Dynamic file uploads with `fileset()`
+4. **Data Sources** - Current AWS region
+5. **Functions** - `filemd5()`, `regex()`, `lookup()`
+6. **Outputs** - Website URL and deployment info
+7. **Dependencies** - Proper resource ordering
+
+## 🔧 Development
+
+### Run Locally
+
+```bash
+cd s3_demo_website
+npm run dev
+```
+
+Opens at `http://localhost:5173` with hot reload.
+
+### Build for Production
+
+```bash
+npm run build
+```
+
+Creates optimized bundle in `dist/`.
+
+## 🎨 Features Walkthrough
+
+### Live Prices Tab
+- Real-time crypto prices for 6 major coins
+- 24h price changes with trending indicators
+- Market cap and volume data
+- "Add to Stack" button for portfolio tracking
+- Smooth hover animations
+
+### Charts Tab
+- Select any cryptocurrency
+- Historical price data (24h, 7d, 30d, 1y)
+- Interactive tooltips
+- Animated area charts
+- Color-coded by crypto
+
+### News Tab
+- Latest crypto news articles
+- Article images and metadata
+- Time ago formatting
+- External links to full articles
+- Category tags
+
+### Portfolio Tab
+- Track your crypto investments
+- Shows current value vs cost basis
+- P&L calculation with percentages
+- Stored in browser localStorage
+- Remove holdings easily
+
+### Global Market Stats
+- Total market capitalization
+- 24h trading volume
+- Number of active cryptocurrencies
+- Market dominance pie chart (BTC, ETH, Others)
+- Live data indicator
+
+## 💡 Try These Exercises
+
+1. **Add a new crypto** - Edit `CRYPTO_BEVERAGES` in `src/types/crypto.ts`
+2. **Change colors** - Modify Tailwind config in `tailwind.config.js`
+3. **Add CloudFront** - Implement HTTPS and CDN in Terraform
+4. **Custom domain** - Use Route53 for a real domain name
+5. **CI/CD Pipeline** - Automate builds and deployments with GitHub Actions
+
+## 🌟 Why This Impresses Students
+
+1. **It's LIVE!** - Not mocked data, actual cryptocurrency prices updating in real-time
+2. **Beautiful animations** - Smooth transitions and micro-interactions throughout
+3. **Professional quality** - Looks like a real production application
+4. **Real-world relevant** - Crypto is something students know and care about
+5. **Complete workflow** - From code to deployed website in minutes
+6. **Cost effective** - Entire setup costs pennies per month on AWS
+
+## 📚 Resources
+
+- [Terraform Documentation](https://www.terraform.io/docs)
+- [AWS S3 Website Hosting](https://docs.aws.amazon.com/AmazonS3/latest/userguide/WebsiteHosting.html)
+- [React Documentation](https://react.dev)
+- [CoinGecko API](https://www.coingecko.com/en/api)
+- [Tailwind CSS](https://tailwindcss.com)
+- [Framer Motion](https://www.framer.com/motion/)
+
+---
+
+# 🇳🇴 Original Lab Instructions (Norwegian)
 
 ## Mål
 Deploy en statisk nettside på AWS S3 ved hjelp av Terraform. Denne øvelsen dekker bruk av moduler fra Terraform Registry, håndtering av ressurser med AWS CLI, samt bruk av variabler og outputs i Terraform.
@@ -188,8 +391,6 @@ terraform apply
 ```
 
 Terraform vil nå bruke default-verdien uten at du må oppgi den på kommandolinjen.
-
-```
 
 **Best practice**: Bruk default-verdier for variabler som sjelden endres, men la kritiske verdier (som bucket-navn i produksjon) være uten default for å sikre at de blir eksplisitt satt.
 
