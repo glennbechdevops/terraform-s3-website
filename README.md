@@ -519,10 +519,12 @@ terraform destroy
 
 Terraform har en innebygd måte å håndtere refactoring: `moved` blocks.
 
-**Steg 1**: Før du endrer `main.tf`, legg til `moved` blocks som forteller Terraform hvor ressursene skal flyttes:
+**Steg 1**: Før du refaktorerer koden, legg til `moved` blocks i **rot-nivå `main.tf`** (ikke modulens main.tf) som forteller Terraform hvor ressursene skal flyttes.
+
+Disse `moved` blokkene legges til **øverst** i rot-nivå `main.tf`, før de eksisterende ressursene:
 
 ```hcl
-# Legg til i main.tf FØR du sletter de gamle ressursene
+# Legg til i rot-nivå main.tf FØR du sletter de gamle ressursene
 moved {
   from = aws_s3_bucket.website
   to   = module.s3_website.aws_s3_bucket.website
@@ -544,7 +546,14 @@ moved {
 }
 ```
 
-**Steg 2**: I root `main.tf`, erstatt alle S3-ressursene med et modul-kall:
+**Steg 2**: I rot-nivå `main.tf`, erstatt alle S3-ressursene med et modul-kall.
+
+Etter denne endringen skal rot-nivå `main.tf` **kun** inneholde:
+- `moved` blokkene fra Steg 1
+- Modul-kallet nedenfor
+- Eventuelle outputs (som oppdateres i Steg 3)
+
+Slett alle de gamle `resource "aws_s3_..."` blokkene og erstatt dem med:
 
 ```hcl
 module "s3_website" {
@@ -581,13 +590,24 @@ output "bucket_name" {
 terraform init
 ```
 
-**Steg 5**: Kjør plan og se magien:
+**Steg 5**: Kjør plan og observer at ressursene flyttes uten å bli gjenskapt:
 
 ```bash
 terraform plan
 ```
 
-Terraform vil si: "These objects moved - no changes needed"
+Du skal nå se linjer som bekrefter at ressursene flyttes i state, for eksempel:
+
+```
+# aws_s3_bucket.website has moved to module.s3_website.aws_s3_bucket.website
+# aws_s3_bucket_website_configuration.website has moved to module.s3_website.aws_s3_bucket_website_configuration.website
+# aws_s3_bucket_public_access_block.website has moved to module.s3_website.aws_s3_bucket_public_access_block.website
+# aws_s3_bucket_policy.website has moved to module.s3_website.aws_s3_bucket_policy.website
+```
+
+Terraform vil konkludere med: **"No changes. Your infrastructure matches the configuration."**
+
+Dette betyr at `moved` blokkene fungerte - ressursene blir flyttet i state uten å bli slettet og gjenskapt!
 
 **Steg 6**: Apply for å oppdatere state:
 
@@ -787,15 +807,30 @@ terraform output cloudfront_url
 
 ---
 
-## Del 4: GitHub Actions CI/CD Pipeline
+## Oppsummering - Part 2
 
-### Mål
+Du har nå lært:
+
+- **Remote State Management**: State deling i team og CI/CD
+- **Terraform-moduler**: Gjenbrukbar, DRY infrastruktur-kode
+- **CloudFront CDN**: Global distribusjon med HTTPS, minimal kode
+- **State Management med moved blocks**: Refaktorering uten downtime
+
+**Neste steg**: Utforsk bonusoppgavene nedenfor for å lære enda mer om GitHub Actions CI/CD, custom domains, og avanserte Terraform-konsepter!
+
+---
+
+## Bonusoppgaver
+
+### 1. GitHub Actions CI/CD Pipeline
+
+#### Mål
 
 Automatiser Terraform deployment:
 - **Pull Request**: Kjør `terraform plan` og vis endringer
 - **Merge til main**: Kjør `terraform apply` automatisk
 
-### Steg 1: Opprett Workflow Fil
+#### Steg 1: Opprett Workflow Fil
 
 **Lag** `.github/workflows/terraform.yml`:
 
@@ -877,7 +912,7 @@ jobs:
         run: terraform apply -auto-approve
 ```
 
-### Steg 2: Konfigurer GitHub Secrets
+#### Steg 2: Konfigurer GitHub Secrets
 
 Du må gi GitHub Actions tilgang til AWS:
 
@@ -890,7 +925,7 @@ Du må gi GitHub Actions tilgang til AWS:
 
 **Sikkerhetstips**: Disse secrets bør være fra en dedicated IAM-bruker med minimal permissions (kun det Terraform trenger).
 
-### Steg 3: Test Pipeline
+#### Steg 3: Test Pipeline
 
 1. **Lag en ny branch**:
 
@@ -934,9 +969,7 @@ git push origin test-pipeline
 
 ---
 
-## Bonusoppgaver
-
-### 1. Custom Domain med Data Sources
+### 2. Custom Domain med Data Sources
 
 #### Hva er Data Sources?
 
@@ -946,22 +979,104 @@ Så langt har vi kun brukt `resource` blokker som **oppretter** nye ressurser i 
 - `resource` = "Opprett dette" (write)
 - `data` = "Hent info om dette" (read-only)
 
-#### Bruk av eksisterende Hosted Zone
+#### Steg 1: Hent eksisterende Hosted Zone
 
 Vi har en delt Route53 hosted zone for domenet `thecloudcollege.com` som du kan bruke. I stedet for å opprette en ny hosted zone, skal vi **hente** den eksisterende med en data source.
+
+**Legg til øverst i `modules/s3-website/main.tf`**:
+
+```hcl
+# Data source - henter informasjon om eksisterende hosted zone
+data "aws_route53_zone" "main" {
+  zone_id = "Z09151061LZNRB9E4BYEL"  # thecloudcollege.com
+}
+```
+
+#### Steg 2: Konfigurer AWS provider med alias for us-east-1
+
+CloudFront krever at SSL-sertifikater ligger i `us-east-1` regionen, uansett hvor CloudFront distribusjonen selv er. Dette er en AWS-begrensning.
+
+**Ekspert tips**: Hvorfor må CloudFront-sertifikater ligge i us-east-1?
+- CloudFront er en **global** tjeneste (ikke region-spesifikk)
+- AWS bruker us-east-1 som sin "globale" region for slike tjenester
+- Historisk sett var us-east-1 AWSs første region, og mange globale tjenester ble designet med denne som standard
+- Dette gjelder kun CloudFront - andre tjenester som ALB kan bruke ACM-sertifikater fra hvilken som helst region
+
+For å hente sertifikatet fra us-east-1, må vi sette opp en provider alias. Dette gjøres **kun én gang** i rot-nivå.
+
+**Opprett eller oppdater `providers.tf` i rotmappen**:
+
+```hcl
+# Default AWS provider - din primære region
+provider "aws" {
+  region = "eu-west-1"  # Eller din foretrukne region
+}
+
+# Alias provider for us-east-1
+# Nødvendig fordi CloudFront krever ACM-sertifikater i us-east-1
+provider "aws" {
+  alias  = "us-east-1"
+  region = "us-east-1"
+}
+```
+
+**Forklaring**: Dette oppretter to AWS provider-konfigurasjoner:
+- Den første (uten alias) er default og brukes for alle ressurser
+- Den andre (med `alias = "us-east-1"`) brukes kun når vi eksplisitt spesifiserer `provider = aws.us-east-1` på en ressurs
+
+#### Steg 3: Hent wildcard ACM-sertifikat fra us-east-1
+
+Vi har et wildcard-sertifikat (`*.thecloudcollege.com`) i `us-east-1` som dekker alle subdomener.
 
 **Legg til i `modules/s3-website/main.tf`**:
 
 ```hcl
-# Data source - henter informasjon om en eksisterende hosted zone
-data "aws_route53_zone" "main" {
-  zone_id = "Z09151061LZNRB9E4BYEL"  # thecloudcollege.com
+# Data source - henter eksisterende wildcard ACM-sertifikat
+# Bruker us-east-1 provider fordi CloudFront krever sertifikat i denne regionen
+data "aws_acm_certificate" "wildcard" {
+  provider = aws.us-east-1
+  domain   = "*.thecloudcollege.com"
+  statuses = ["ISSUED"]
 }
+```
 
-# Resource - oppretter en ny DNS-record i den eksisterende zonen
+#### Steg 4: Oppdater CloudFront til å bruke custom domain
+
+Nå må CloudFront konfigureres til å akseptere requests fra ditt custom domain og bruke ACM-sertifikatet for HTTPS.
+
+**Finn `aws_cloudfront_distribution` ressursen** i `modules/s3-website/main.tf` og gjør følgende endringer:
+
+1. **Legg til `aliases` for custom domain** (rett under `enabled` og `default_root_object`):
+
+```hcl
+resource "aws_cloudfront_distribution" "website" {
+  enabled             = true
+  default_root_object = "index.html"
+  aliases             = ["${var.subdomain}.thecloudcollege.com"]  # NYTT: Custom domain
+
+  # ... resten av konfigurasjonen ...
+}
+```
+
+2. **Erstatt `viewer_certificate` blokken** (den eksisterende bruker `cloudfront_default_certificate = true`):
+
+```hcl
+  viewer_certificate {
+    acm_certificate_arn      = data.aws_acm_certificate.wildcard.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+```
+
+#### Steg 5: Opprett DNS-record
+
+**Legg til Route53 record** i `modules/s3-website/main.tf`:
+
+```hcl
+# Resource - oppretter DNS-record som peker til CloudFront
 resource "aws_route53_record" "website" {
-  zone_id = data.aws_route53_zone.main.zone_id  # Bruker data fra data source
-  name    = "${var.student_name}.thecloudcollege.com"
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "${var.subdomain}.thecloudcollege.com"
   type    = "A"
 
   alias {
@@ -972,11 +1087,13 @@ resource "aws_route53_record" "website" {
 }
 ```
 
-**Legg til variabel i `modules/s3-website/variables.tf`**:
+#### Steg 6: Legg til subdomain-variabel
+
+**Legg til i `modules/s3-website/variables.tf`**:
 
 ```hcl
-variable "student_name" {
-  description = "Your name for the subdomain (e.g., 'glenn' becomes glenn.thecloudcollege.com)"
+variable "subdomain" {
+  description = "Subdomain for the website (e.g., 'glenn' becomes glenn.thecloudcollege.com)"
   type        = string
 }
 ```
@@ -989,7 +1106,7 @@ module "s3_website" {
 
   bucket_name         = "ditt-bucket-navn"
   website_files_path  = "${path.root}/s3_demo_website"
-  student_name        = "ditt-navn"  # Endre til ditt navn
+  subdomain           = "ditt-navn"  # Endre til ditt navn
 
   tags = {
     Name        = "My Website"
@@ -998,30 +1115,85 @@ module "s3_website" {
 }
 ```
 
+#### Steg 7: Oppdater modul-kallet og outputs
+
+**Oppdater modul-kallet i rot `main.tf`** for å inkludere subdomain:
+
+```hcl
+module "s3_website" {
+  source = "./modules/s3-website"
+
+  bucket_name         = "ditt-bucket-navn"
+  website_files_path  = "${path.root}/s3_demo_website/dist"
+  subdomain           = "ditt-navn"  # Endre til ditt unike navn (f.eks. "glenn")
+
+  tags = {
+    Name        = "My Website"
+    Environment = "Demo"
+  }
+}
+```
+
+**Legg til output i rot `main.tf`**:
+
+```hcl
+output "custom_domain_url" {
+  value       = module.s3_website.custom_domain_url
+  description = "Custom domain URL with HTTPS"
+}
+```
+
 **Legg til output i `modules/s3-website/outputs.tf`**:
 
 ```hcl
 output "custom_domain_url" {
   description = "Your custom domain URL"
-  value       = "https://${var.student_name}.thecloudcollege.com"
+  value       = "https://${var.subdomain}.thecloudcollege.com"
 }
 ```
 
-**Deploy**:
+#### Steg 8: Deploy og test
+
+1. **Re-initialiser Terraform** (nødvendig pga. ny provider):
+
+```bash
+terraform init
+```
+
+2. **Kjør plan** for å se hva som vil bli opprettet/endret:
+
+```bash
+terraform plan
+```
+
+Du skal se at CloudFront blir oppdatert og at en ny Route53 record blir opprettet.
+
+3. **Apply endringene**:
 
 ```bash
 terraform apply
 ```
 
-Vent noen minutter på DNS-propagering, og din side vil være tilgjengelig på `https://ditt-navn.thecloudcollege.com`!
+**Merk**: CloudFront deployment tar 5-15 minutter når konfigurasjonen endres.
+
+4. **Hent din custom domain URL**:
+
+```bash
+terraform output custom_domain_url
+```
+
+5. **Test din custom domain**:
+
+Vent noen minutter på at CloudFront-distribusjonen er ferdig deployet, og åpne URL-en i nettleseren. Din side vil nå være tilgjengelig på `https://ditt-navn.thecloudcollege.com` med full HTTPS!
 
 **Nøkkelpunkter**:
-- **Data source** (`data "aws_route53_zone"`) henter info om eksisterende hosted zone
-- **Resource** (`aws_route53_record`) oppretter en ny DNS-record
+- **Data sources** lar deg hente informasjon om eksisterende ressurser uten å endre dem
+- **Provider alias** (`provider = aws.us-east-1`) lar deg bruke flere regioner i samme konfigurasjon
+- CloudFront krever ACM-sertifikater i us-east-1 region
+- Route53 `alias` records peker til AWS-ressurser (som CloudFront) uten å bruke IP-adresser
 - Data sources refereres med `data.<type>.<name>`, f.eks. `data.aws_route53_zone.main.zone_id`
-- Du kan ikke endre en data source - den er read-only
 
-### 2. Validation Rules på variabler i modulen
+### 3. Validation Rules på variabler i modulen
 
 Legg til validation i `modules/s3-website/variables.tf`:
 
@@ -1036,37 +1208,6 @@ variable "bucket_name" {
   }
 }
 ```
-
-### 3. Multi-Environment Setup
-
-Bruk samme modul for dev og prod:
-
-```hcl
-module "dev_website" {
-  source = "./modules/s3-website"
-  bucket_name = "dev-${var.project_name}"
-  tags = { Environment = "dev" }
-}
-
-module "prod_website" {
-  source = "./modules/s3-website"
-  bucket_name = "prod-${var.project_name}"
-  tags = { Environment = "prod" }
-}
-```
-
----
-
-## Oppsummering - Part 2
-
-Du har nå lært:
-
-- **Remote State Management**: State deling i team og CI/CD
-- **Terraform-moduler**: Gjenbrukbar, DRY infrastruktur-kode
-- **CloudFront CDN**: Global distribusjon med HTTPS, minimal kode
-- **GitHub Actions**: Automatisk testing og deployment av infrastruktur
-
-**Neste steg**: Utforsk Terraform Registry for community-moduler, eller bygg dine egne komplekse moduler!
 
 ---
 
