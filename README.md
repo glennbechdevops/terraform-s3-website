@@ -394,7 +394,72 @@ Du vil se at Terminal 2 får en feilmelding om at state er låst, med informasjo
 
 Moduler er Terraforms måte å pakke og gjenbruke infrastruktur-kode på. I stedet for å copy-paste kode, lager vi en modul som kan brukes flere steder med ulike konfigurasjoner.
 
-**Analogi**: En modul er som en funksjon i programmering - den tar inputs, gjør noe, og returnerer outputs.
+**Analogi**: En modul er som en funksjon i programmering - den tar inputs (variabler), utfører operasjoner (ressurser), og returnerer outputs.
+
+### Modulstruktur
+
+En typisk Terraform-modul består av følgende filer:
+
+```
+modules/s3-website/
+├── main.tf        # Hovedressurser (S3, CloudFront, etc.)
+├── variables.tf   # Input-variabler som modulen tar imot
+├── outputs.tf     # Output-verdier som modulen returnerer
+└── versions.tf    # Provider requirements (valgfri)
+```
+
+**Fordeler med moduler:**
+- **Gjenbrukbarhet**: Samme modul kan brukes i flere prosjekter eller miljøer
+- **Abstrahering**: Skjuler kompleksitet bak et enkelt grensesnitt
+- **Standardisering**: Sikrer konsistent infrastruktur på tvers av prosjekter
+- **Vedlikehold**: Endringer på ett sted propagerer til alle bruksområder
+
+### Root Module vs Child Module
+
+- **Root module**: Hovedkonfigurasjonen i prosjektets rotmappe
+- **Child module**: Gjenbrukbare moduler i `modules/`-mappen
+
+Root module kaller child modules og sender inn verdier via variabler:
+
+```hcl
+# Root module (main.tf)
+module "s3_website" {
+  source = "./modules/s3-website"  # Peker til modul-mappen
+
+  # Variabler som sendes til modulen
+  bucket_name = "min-bucket"
+  subdomain   = "mitt-navn"
+}
+
+# Outputs fra modulen brukes slik:
+output "website_url" {
+  value = module.s3_website.cloudfront_url
+}
+```
+
+### Provider Configuration i Moduler
+
+I denne oppgaven bruker vi **to AWS providers** (multi-region setup):
+- Default provider i `eu-west-1` for S3, CloudFront, etc.
+- Aliased provider i `us-east-1` for ACM-sertifikater (CloudFront-krav)
+
+**Viktig**: Du må sende begge providers til modulen eksplisitt. Se [Appendix A: Provider Configuration](#appendix-a-provider-configuration-i-moduler) for detaljert forklaring av hvordan dette fungerer.
+
+**I rot-nivå `main.tf`, send providers til modulen**:
+
+```hcl
+module "s3_website" {
+  source = "./modules/s3-website"
+
+  providers = {
+    aws           = aws           # Default provider
+    aws.us-east-1 = aws.us-east-1 # Aliased provider
+  }
+
+  bucket_name = var.bucket_name
+  subdomain   = var.subdomain
+}
+```
 
 ### Del A: Lag en modul
 
@@ -1217,3 +1282,196 @@ variable "bucket_name" {
 - [AWS CloudFront Developer Guide](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/)
 - [GitHub Actions Terraform Tutorial](https://developer.hashicorp.com/terraform/tutorials/automation/github-actions)
 - [Terraform Best Practices](https://www.terraform-best-practices.com/)
+
+---
+
+# Appendix
+
+## Appendix A: Provider Configuration i Moduler
+
+Denne seksjonen gir en grundig forklaring av hvordan Terraform håndterer providers i moduler, spesielt når du trenger å bruke flere AWS-regioner.
+
+### Hvor skal providers konfigureres?
+
+**Best practice**: Provider-konfigurasjon skal være i **root module**, ikke i child modules.
+
+```hcl
+# Root module (providers.tf) - RIKTIG
+provider "aws" {
+  region = "eu-west-1"
+}
+
+# Child module - IKKE konfigurer providers her
+```
+
+**Hvorfor?**
+- Moduler skal være gjenbrukbare på tvers av ulike AWS-kontoer og regioner
+- Root module kontrollerer hvilke credentials og regioner som brukes
+- Unngår konflikter når modulen brukes flere ganger
+
+### Provider Inheritance
+
+Som standard arver moduler automatisk provider-konfigurasjonen fra root module:
+
+```hcl
+# Root module
+provider "aws" {
+  region = "eu-west-1"
+}
+
+module "s3_website" {
+  source = "./modules/s3-website"
+  # Provider arves automatisk - ingen ekstra konfigurasjon nødvendig
+}
+```
+
+Dette fungerer utmerket for enkle use cases der du kun trenger én provider-konfigurasjon.
+
+### Multi-Region Setup: Aliased Providers
+
+I denne oppgaven trenger vi **to AWS providers** fordi:
+- Hovedressurser (S3, CloudFront) skal være i `eu-west-1`
+- ACM-sertifikater for CloudFront **må** være i `us-east-1` (AWS-krav)
+
+#### Steg 1: Definer providers i root module
+
+**Opprett eller oppdater `providers.tf` i rotmappen**:
+
+```hcl
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "eu-west-1"
+}
+
+# Alias provider for us-east-1
+# Nødvendig fordi CloudFront krever ACM-sertifikater i us-east-1
+provider "aws" {
+  alias  = "us-east-1"
+  region = "us-east-1"
+}
+```
+
+**Forklaring**:
+- Første `provider "aws"` uten alias er default provider
+- Andre `provider "aws"` med `alias = "us-east-1"` er en navngitt provider
+- Du kan ha flere aliased providers hvis du trenger flere regioner
+
+#### Steg 2: Send providers til modulen
+
+Når du bruker aliased providers, må du eksplisitt sende dem til modulen:
+
+```hcl
+# Root module (main.tf)
+module "s3_website" {
+  source = "./modules/s3-website"
+
+  # Send begge providers til modulen
+  providers = {
+    aws           = aws           # Default provider
+    aws.us-east-1 = aws.us-east-1 # Aliased provider
+  }
+
+  bucket_name = var.bucket_name
+  subdomain   = var.subdomain
+}
+```
+
+**Merk**:
+- `aws = aws` sender default provider
+- `aws.us-east-1 = aws.us-east-1` sender aliased provider
+- Uten `providers`-blokken vil modulen kun få default provider
+
+#### Steg 3: Deklarer forventede providers i modulen
+
+Modulen må eksplisitt deklarere at den forventer en aliased provider:
+
+```hcl
+# modules/s3-website/versions.tf
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+      configuration_aliases = [aws.us-east-1]
+    }
+  }
+}
+```
+
+**`configuration_aliases`** forteller Terraform:
+- Denne modulen forventer å motta en aliased provider kalt `aws.us-east-1`
+- Root module må sende denne provideren når modulen kalles
+
+#### Steg 4: Bruk providers i ressurser
+
+```hcl
+# modules/s3-website/main.tf
+
+# Bruker default provider (eu-west-1) - ingen provider-attributt nødvendig
+resource "aws_s3_bucket" "website" {
+  bucket = var.bucket_name
+}
+
+resource "aws_cloudfront_distribution" "website" {
+  # Også default provider (eu-west-1)
+  enabled = true
+  # ...
+}
+
+# Bruker eksplisitt aliased provider (us-east-1)
+data "aws_acm_certificate" "wildcard" {
+  provider = aws.us-east-1  # Eksplisitt spesifisert
+  domain   = "*.thecloudcollege.com"
+  statuses = ["ISSUED"]
+}
+```
+
+**Regel**:
+- Ressurser **uten** `provider`-attributt bruker default provider
+- Ressurser **med** `provider = aws.us-east-1` bruker aliased provider
+
+### Vanlige Feil og Løsninger
+
+#### Feil 1: "Provider configuration not present"
+
+```
+Error: Provider configuration not present
+Module module.s3_website does not declare a provider named aws.us-east-1
+```
+
+**Løsning**: Legg til `configuration_aliases` i `modules/s3-website/versions.tf`.
+
+#### Feil 2: "Module does not support aws.us-east-1"
+
+```
+Error: Module does not support aws.us-east-1 provider configuration
+```
+
+**Løsning**: Modulen må eksplisitt deklarere at den forventer aliased provider via `configuration_aliases`.
+
+#### Feil 3: Ressurs bruker feil region
+
+**Problem**: ACM-sertifikat blir opprettet i eu-west-1 i stedet for us-east-1.
+
+**Løsning**: Legg til `provider = aws.us-east-1` på ressursen.
+
+### Oppsummering
+
+**For å bruke multi-region providers i moduler**:
+
+1. **Root module**: Definer alle providers (default + aliased) i `providers.tf`
+2. **Module call**: Send providers eksplisitt via `providers = { ... }`
+3. **Module declaration**: Deklarer forventede providers med `configuration_aliases`
+4. **Resources**: Bruk `provider = aws.alias` på ressurser som trenger aliased provider
+
+Dette gir deg full kontroll over hvilke regioner som brukes for hvilke ressurser.
