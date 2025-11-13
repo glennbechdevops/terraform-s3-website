@@ -446,15 +446,15 @@ modules/s3-website/
 - **Standardisering**: Sikrer konsistent infrastruktur på tvers av prosjekter
 - **Vedlikehold**: Endringer på ett sted propagerer til alle bruksområder
 
-### Root Module vs Child Module
+### Hovedmodul vs Undermodul
 
-- **Root module**: Hovedkonfigurasjonen i prosjektets rotmappe
-- **Child module**: Gjenbrukbare moduler i `modules/`-mappen
+- **Hovedmodul**: Hovedkonfigurasjonen i prosjektets rotmappe
+- **Undermodul**: Gjenbrukbare moduler i `modules/`-mappen
 
-Root module kaller child modules og sender inn verdier via variabler:
+Hovedmodulen kaller undermoduler og sender inn verdier via variabler:
 
 ```hcl
-# Root module (main.tf)
+# Hovedmodul (main.tf)
 module "s3_website" {
   source = "./modules/s3-website"  # Peker til modul-mappen
 
@@ -1315,28 +1315,28 @@ Denne seksjonen gir en grundig forklaring av hvordan Terraform håndterer provid
 
 ### Hvor skal providers konfigureres?
 
-**Best practice**: Provider-konfigurasjon skal være i **root module**, ikke i child modules.
+**Best practice**: Provider-konfigurasjon skal være i **hovedmodul**, ikke i undermoduler.
 
 ```hcl
-# Root module (providers.tf) - RIKTIG
+# Hovedmodul (providers.tf) - RIKTIG
 provider "aws" {
   region = "eu-west-1"
 }
 
-# Child module - IKKE konfigurer providers her
+# Undermodul - IKKE konfigurer providers her
 ```
 
 **Hvorfor?**
 - Moduler skal være gjenbrukbare på tvers av ulike AWS-kontoer og regioner
-- Root module kontrollerer hvilke credentials og regioner som brukes
+- Hovedmodulen kontrollerer hvilke credentials og regioner som brukes
 - Unngår konflikter når modulen brukes flere ganger
 
 ### Provider Inheritance
 
-Som standard arver moduler automatisk provider-konfigurasjonen fra root module:
+Som standard arver moduler automatisk provider-konfigurasjonen fra hovedmodulen:
 
 ```hcl
-# Root module
+# Hovedmodul
 provider "aws" {
   region = "eu-west-1"
 }
@@ -1355,7 +1355,7 @@ I denne oppgaven trenger vi **to AWS providers** fordi:
 - Hovedressurser (S3, CloudFront) skal være i `eu-west-1`
 - ACM-sertifikater for CloudFront **må** være i `us-east-1` (AWS-krav)
 
-#### Steg 1: Definer providers i root module
+#### Steg 1: Definer providers i hovedmodul
 
 **Opprett eller oppdater `providers.tf` i rotmappen**:
 
@@ -1393,7 +1393,7 @@ provider "aws" {
 Når du bruker aliased providers, må du eksplisitt sende dem til modulen:
 
 ```hcl
-# Root module (main.tf)
+# Hovedmodul (main.tf)
 module "s3_website" {
   source = "./modules/s3-website"
 
@@ -1432,7 +1432,7 @@ terraform {
 
 **`configuration_aliases`** forteller Terraform:
 - Denne modulen forventer å motta en aliased provider kalt `aws.us-east-1`
-- Root module må sende denne provideren når modulen kalles
+- Hovedmodulen må sende denne provideren når modulen kalles
 
 #### Steg 4: Bruk providers i ressurser
 
@@ -1491,7 +1491,7 @@ Error: Module does not support aws.us-east-1 provider configuration
 
 **For å bruke multi-region providers i moduler**:
 
-1. **Root module**: Definer alle providers (default + aliased) i `providers.tf`
+1. **Hovedmodul**: Definer alle providers (default + aliased) i `providers.tf`
 2. **Module call**: Send providers eksplisitt via `providers = { ... }`
 3. **Module declaration**: Deklarer forventede providers med `configuration_aliases`
 4. **Resources**: Bruk `provider = aws.alias` på ressurser som trenger aliased provider
