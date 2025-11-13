@@ -251,11 +251,9 @@ terraform apply -var 'bucket_name=ditt_bucket_navn'
 
 Terraform vil nå vise at det ikke er nødvendig med endringer, siden bucket-navnet er det samme.
 
-**Pro tips**: Hvis du er helt sikker på hva du gjør - og liker å leve litt risikabelt - kan du bruke `terraform apply --auto-approve` for å hoppe over bekreftelsen. Men vær oppmerksom på at dette kan føre til utilsiktede endringer hvis du ikke har sjekket planen først.
-
 **Fordelen med variabler**: Du kan nå enkelt endre bucket-navnet uten å redigere koden, og gjenbruke samme konfigurasjon for flere miljøer.
 
-### Steg 8: Bruk default-verdier for variabler
+### Steg 9: Bruk default-verdier for variabler
 
 I stedet for å måtte oppgi verdier på kommandolinjen hver gang, kan du sette default-verdier for variabler. Dette gjør det enklere å jobbe med Terraform i daglig bruk.
 
@@ -284,7 +282,7 @@ Terraform vil nå bruke default-verdien uten at du må oppgi den på kommandolin
 Prøv å endre HTML- og CSS-filene i `s3_demo_website`-mappen, og kjør sync-kommandoen på nytt for å se endringene:
 
 ```bash
-aws s3 sync s3_demo_website s3://unikt-bucket-navn
+  aws s3 sync s3_demo_website/dist s3://unikt-bucket-navn
 ```
 
 ## Oppsummering - Part 1
@@ -534,10 +532,6 @@ variable "tags" {
   default     = {}
 }
 
-variable "website_files_path" {
-  description = "Path to website files to upload"
-  type        = string
-}
 ```
 
 #### Steg 3: Flytt Ressurser til modulen
@@ -554,6 +548,8 @@ variable "website_files_path" {
 **Fyll inn** `modules/s3-website/outputs.tf`:
 
 ```hcl
+data "aws_region" "current" {}
+
 output "bucket_name" {
   description = "Name of the S3 bucket"
   value       = aws_s3_bucket.website.id
@@ -569,8 +565,7 @@ output "bucket_arn" {
   value       = aws_s3_bucket.website.arn
 }
 
-# Don't forget to add data source for region
-data "aws_region" "current" {}
+
 ```
 
 ### Viktig: Før du bruker modulen - State Management
@@ -616,7 +611,8 @@ terraform destroy
 
 Terraform har en innebygd måte å håndtere refactoring: `moved` blocks.
 
-**Steg 1**: Før du refaktorerer koden, legg til `moved` blocks i **rot-nivå `main.tf`** (ikke modulens main.tf) som forteller Terraform hvor ressursene skal flyttes.
+**Steg 1**: Legg til `moved` blocks i **rot-nivå `main.tf`** (ikke
+modulens main.tf) som forteller Terraform hvor ressursene skal flyttes.
 
 Disse `moved` blokkene legges til **øverst** i rot-nivå `main.tf`, før de eksisterende ressursene:
 
@@ -645,19 +641,13 @@ moved {
 
 **Steg 2**: I rot-nivå `main.tf`, erstatt alle S3-ressursene med et modul-kall.
 
-Etter denne endringen skal rot-nivå `main.tf` **kun** inneholde:
-- `moved` blokkene fra Steg 1
-- Modul-kallet nedenfor
-- Eventuelle outputs (som oppdateres i Steg 3)
-
-Slett alle de gamle `resource "aws_s3_..."` blokkene og erstatt dem med:
+ **slett alle S3-ressursene** og erstatt med et modul-kall.
 
 ```hcl
 module "s3_website" {
   source = "./modules/s3-website"
 
   bucket_name         = "ditt-bucket-navn"
-  website_files_path  = "${path.root}/s3_demo_website/dist"
 
   tags = {
     Name        = "Crypto Juice Exchange"
@@ -666,6 +656,10 @@ module "s3_website" {
   }
 }
 ```
+Etter denne endringen skal rot-nivå `main.tf` **kun** inneholde:
+- `moved` blokkene fra Steg 1
+- Modul-kallet nedenfor
+- Eventuelle outputs (som oppdateres i Steg 3)
 
 **Steg 3**: Oppdater outputs i root `main.tf` til å bruke module outputs:
 
@@ -740,7 +734,6 @@ module "s3_website" {
   source = "./modules/s3-website"
 
   bucket_name         = "ditt-bucket-navn"
-  website_files_path  = "${path.root}/s3_demo_website/dist"
 
   tags = {
     Name        = "Crypto Juice Exchange"
@@ -1023,7 +1016,6 @@ module "s3_website" {
   source = "./modules/s3-website"
 
   bucket_name         = "ditt-bucket-navn"
-  website_files_path  = "${path.root}/s3_demo_website"
   subdomain           = "ditt-navn"  # Endre til ditt navn
 
   tags = {
@@ -1048,7 +1040,6 @@ module "s3_website" {
   }
 
   bucket_name         = "ditt-bucket-navn"
-  website_files_path  = "${path.root}/s3_demo_website/dist"
   subdomain           = "ditt-navn"  # Endre til ditt unike navn (f.eks. "glenn")
 
   tags = {
@@ -1188,7 +1179,6 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check
-        continue-on-error: true
 
       - name: Terraform Validate
         run: terraform validate
