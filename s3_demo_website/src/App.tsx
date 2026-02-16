@@ -85,7 +85,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-mono-50">
+    <div className="min-h-screen bg-[#D4AF37]">
       <div className="relative">
         {/* Header */}
         <header className="border-b border-mono-200 bg-white sticky top-0 z-50">
