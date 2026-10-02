@@ -49,7 +49,7 @@ En **fork** er din egen kopi av et GitHub-repo under din egen konto. Du jobber i
 
 Terraform og AWS CLI trenger AWS-nøkler for å kunne snakke med AWS-kontoen din. En Codespace starter uten disse, så du må konfigurere dem én gang per Codespace.
 
-Hent `Access Key ID` og `Secret Access Key` fra AWS Academy / IAM, og kjør:
+Hent `Access Key ID` og `Secret Access Key`:
 
 ```bash
 aws configure
@@ -62,13 +62,6 @@ Fyll inn verdiene når du blir spurt:
 - **Default region name**: `eu-west-1`
 - **Default output format**: `json`
 
-Hvis du bruker AWS Academy må du i tillegg sette `AWS_SESSION_TOKEN`. Verifiser at nøklene fungerer:
-
-```bash
-aws sts get-caller-identity
-```
-
-Kommandoen skal returnere konto-ID og bruker-ARN. Får du en feilmelding, er nøklene feil eller utløpt.
 
 **Merk**: Nøklene lagres i `~/.aws/credentials` inne i Codespacen. Hvis Codespacen slettes eller resettes, må du kjøre `aws configure` på nytt.
 
