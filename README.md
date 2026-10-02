@@ -198,6 +198,8 @@ terraform init
 terraform apply
 ```
 
+Du vil nå få en 404 hvis du åpner URLen i nettleser fordi S3-Bucketen ikke har noe index.html ennå. 
+
 ### Steg 4: Bygg React-applikasjonen
 
 Før vi kan laste opp nettsiden til S3, må vi bygge React-applikasjonen. Dette kompilerer TypeScript-koden og optimaliserer alle assets for produksjon.
